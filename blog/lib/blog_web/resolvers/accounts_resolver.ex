@@ -6,7 +6,7 @@ defmodule BlogWeb.AccountsResolver do
     {:ok, authors}
   end
 
-  def create_author(_root, _args, _info) do
+  def create_author(_root, args, _info) do
     case Accounts.create_author(args) do
     {:ok, author} ->
       {:ok, author}
