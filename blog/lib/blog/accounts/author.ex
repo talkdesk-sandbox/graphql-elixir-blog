@@ -6,8 +6,8 @@ defmodule Blog.Accounts.Author do
   alias Blog.Comments.Comment
 
   schema "authors" do
-    has_many :posts, Post, foreign_key: :post_id
-    has_many :comments, Comment, foreign_key: :comment_id
+    has_many :posts, Post
+    has_many :comments, Comment
     field :email, :string
     field :name, :string
     field :password, :string

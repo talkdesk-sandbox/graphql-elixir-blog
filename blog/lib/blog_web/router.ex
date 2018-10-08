@@ -26,4 +26,9 @@ defmodule BlogWeb.Router do
   # scope "/api", BlogWeb do
   #   pipe_through :api
   # end
+
+  forward("/graphql",
+    Absinthe.Plug,
+    schema: BlogWeb.Schema)
+
 end

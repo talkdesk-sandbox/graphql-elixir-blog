@@ -60,6 +60,7 @@ defmodule Absinthe.Plug.Request.Query do
         context: config.context,
         adapter: config.adapter,
         root_value: config.root_value,
+        schema: config.schema_mod,
         params: params,
       }
       |> provide_document(config)
@@ -179,7 +180,7 @@ defmodule Absinthe.Plug.Request.Query do
 
   @doc false
   @spec log(t, Logger.level) :: :ok
-  def log(query, level \\ :debug) do
+  def log(query, level) do
     Absinthe.Logger.log_run(level, {
       query.document,
       query.schema,

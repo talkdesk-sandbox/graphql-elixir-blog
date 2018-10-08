@@ -8,6 +8,23 @@ defmodule Blog.Posts do
 
   alias Blog.Posts.Post
 
+  def data() do
+    Dataloader.Ecto.new(Repo, query: &query/2)
+  end
+
+  def query(Comment, _f) do
+    Comment |> limit(10)
+  end
+
+  def query(queryable, _) do
+    queryable
+  end
+
+  def dataloader() do
+    Dataloader.new
+    |> Dataloader.add_source(Posts, Posts.data())
+  end
+
   @doc """
   Returns the list of posts.
 

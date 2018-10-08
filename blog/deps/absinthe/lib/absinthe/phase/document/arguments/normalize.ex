@@ -14,15 +14,16 @@ defmodule Absinthe.Phase.Document.Arguments.Normalize do
 
   use Absinthe.Phase
   alias Absinthe.Blueprint
+  alias Absinthe.Blueprint.Input
 
-  @spec run(Blueprint.t, Keyword.t) :: {:ok, Blueprint.t}
+  @spec run(Blueprint.t(), Keyword.t()) :: {:ok, Blueprint.t()}
   def run(input, _options \\ []) do
-    acc = %{provided_values: get_provided_values(input)}
-    {node, _} = Blueprint.prewalk(input, acc, &handle_node/2)
+    provided_values = get_provided_values(input)
+    node = Blueprint.prewalk(input, &handle_node(&1, provided_values))
     {:ok, node}
   end
 
-  @spec get_provided_values(Blueprint.t) :: map
+  @spec get_provided_values(Blueprint.t()) :: map
   defp get_provided_values(input) do
     case Blueprint.current_operation(input) do
       nil -> %{}
@@ -30,23 +31,25 @@ defmodule Absinthe.Phase.Document.Arguments.Normalize do
     end
   end
 
-  @spec handle_node(Blueprint.node_t, map) :: {Blueprint.node_t, map}
-  # Argument using a variable: Set provided value
-  defp handle_node(%Blueprint.Input.Value{literal: %Blueprint.Input.Variable{name: variable_name}} = node, acc) do
-    {
-      %{node | normalized: Map.get(acc.provided_values, variable_name)},
-      acc
+  defp handle_node(
+         %Input.RawValue{content: %Input.Variable{name: variable_name}} = node,
+         provided_values
+       ) do
+    %Input.Value{
+      normalized: Map.get(provided_values, variable_name),
+      raw: node
     }
-  end
-  # Argument not using a variable: Set provided value from the literal value
-  defp handle_node(%Blueprint.Input.Value{} = node, acc) do
-    {
-      %{node | normalized: node.literal},
-      acc
-    }
-  end
-  defp handle_node(node, acc) do
-    {node, acc}
   end
 
+  # Argument not using a variable: Set provided value from the raw value
+  defp handle_node(%Input.RawValue{} = node, _provided_values) do
+    %Input.Value{
+      normalized: node.content,
+      raw: node
+    }
+  end
+
+  defp handle_node(node, _provided_values) do
+    node
+  end
 end

@@ -11,7 +11,7 @@ defmodule Absinthe.Plug.Types do
   multiple uploaded files as arguments (`:users` and `:metadata`):
 
   ```elixir
-  defmodule MyApp.Schema do
+  defmodule MyAppWeb.Schema do
     use Absinthe.Schema
 
     # Important: Needed to get the `:upload` type
@@ -36,10 +36,10 @@ defmodule Absinthe.Plug.Types do
   use the `multipart/form-data` content type. For example, using `cURL`:
 
   ```shell
-  $ curl -X POST \\
-  -F query="{files(users: \"users_csv\", metadata: \"metadata_json\")}" \\
-  -F users_csv=@users.csv \\
-  -F metadata_json=@metadata.json \\
+  $ curl -X POST \
+  -F query='mutation { uploadFile(users: "users_csv", metadata: "metadata_json") }' \
+  -F users_csv=@users.csv \
+  -F metadata_json=@metadata.json \
   localhost:4000/graphql
   ```
 

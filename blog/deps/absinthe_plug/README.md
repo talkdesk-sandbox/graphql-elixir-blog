@@ -1,7 +1,7 @@
 # Absinthe Plug
 
 [![Build Status](https://travis-ci.org/absinthe-graphql/absinthe_plug.svg?branch=master
-"Build Status")](https://travis-ci.org/absinthe-graphql/absinthe_plug)
+"Build Status")](https://travis-ci.org/absinthe-graphql/absinthe_plug)[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 [Plug](https://hex.pm/packages/plug) support for [Absinthe](https://hex.pm/packages/absinthe),
 the GraphQL toolkit for Elixir.
@@ -14,7 +14,7 @@ Install from [Hex.pm](https://hex.pm/packages/absinthe_plug):
 
 ```elixir
 def deps do
-  [{:absinthe_plug, "~> 1.3.0-rc.0"}]
+  [{:absinthe_plug, "~> 1.4.0"}]
 end
 ```
 
@@ -33,7 +33,7 @@ end
 def deps do
   [
     ...,
-    {:absinthe_plug, "~> 1.2.3"},
+    {:absinthe_plug, "~> 1.4.0"},
     {:poison, "~> 1.3.0"}
   ]
 end
@@ -50,20 +50,51 @@ plug Plug.Parsers,
   json_decoder: Poison
 
 plug Absinthe.Plug,
-  schema: MyApp.Schema
+  schema: MyAppWeb.Schema
+```
 
-If you want only `Absinthe.Plug` to serve a particular route, configure your
+If you want `Absinthe.Plug` to serve only a particular route, configure your
 router like:
 
+```elixir
 plug Plug.Parsers,
   parsers: [:urlencoded, :multipart, :json, Absinthe.Plug.Parser],
   pass: ["*/*"],
   json_decoder: Poison
 
-forward "/api", Absinthe.Plug,
-  schema: MyApp.Schema
+forward "/api",
+  to: Absinthe.Plug,
+  init_opts: [schema: MyAppWeb.Schema]
+```
 
 For more information, see the API documentation for `Absinthe.Plug`.
+
+### Phoenix.Router
+
+If you are using [Phoenix.Router](https://hexdocs.pm/phoenix/Phoenix.Router.html), `forward` expects different arguments:
+
+#### Plug.Router
+
+```elixir
+forward "/graphiql",
+  to: Absinthe.Plug.GraphiQL,
+  init_opts: [
+    schema: MyAppWeb.Schema,
+    interface: :simple
+  ]
+```
+
+#### Phoenix.Router
+
+```elixir
+forward "/graphiql",
+  Absinthe.Plug.GraphiQL,
+  schema: MyAppWeb.Schema,
+  interface: :simple
+```
+
+For more information see [Phoenix.Router.forward/4](https://hexdocs.pm/phoenix/Phoenix.Router.html#forward/4).
+
 
 ## GraphiQL
 
@@ -72,8 +103,8 @@ To add support for a GraphiQL interface, add a configuration for
 
 ```elixir
 forward "/graphiql",
-  Absinthe.Plug.GraphiQL,
-  schema: MyApp.Schema,
+  to: Absinthe.Plug.GraphiQL,
+  init_opts: [schema: MyAppWeb.Schema]
 ```
 
 See the API documentation for `Absinthe.Plug.GraphiQL` for more information.
@@ -90,4 +121,4 @@ See the project list at <http://absinthe-graphql.org/projects>.
 
 ## License
 
-See `LICENSE`.
+See [LICENSE.md](./LICENSE.md).

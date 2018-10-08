@@ -16,7 +16,7 @@ defmodule BlogWeb.AccountsResolver do
   end
 
   def find_author(_parent, %{id: id}, _resolution) do
-   case Accounts.find_author(id) do
+   case Accounts.get_author!(id) do
      nil ->
        {:error, "User ID #{id} not found"}
      user ->

@@ -10,7 +10,7 @@ defmodule Absinthe.Plug.DocumentProvider.Compiled do
 
   Define a new module and `use Absinthe.Plug.DocumentProvider.Compiled`:
 
-      defmodule MyApp.Schema.Documents do
+      defmodule MyAppWeb.Schema.Documents do
         use Absinthe.Plug.DocumentProvider.Compiled
 
         # ... Configure here
@@ -42,7 +42,7 @@ defmodule Absinthe.Plug.DocumentProvider.Compiled do
 
       use Absinthe.Plug.DocumentProvider.Compiled, key_param: "lookup_key"
 
- ## Configuring
+  ## Configuring
 
   You need to configure `Absinthe.Plug` to use any document providers that you create.
   (Only `Absinthe.Plug.DocumentProviders.Default` is configured by default.)
@@ -77,7 +77,7 @@ defmodule Absinthe.Plug.DocumentProvider.Compiled do
             {:halt, %{request | document: document, document_provider_key: document_key}}
         end
       end
-      defp do_process(request, _) do
+      defp do_process(request) do
         {:cont, request}
       end
 

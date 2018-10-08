@@ -8,6 +8,19 @@ defmodule Blog.Comments do
 
   alias Blog.Comments.Comment
 
+  def data() do
+    Dataloader.Ecto.new(Repo, query: &query/2)
+  end
+
+  def query(queryable, _) do
+    queryable
+  end
+
+  def dataloader() do
+    Dataloader.new
+    |> Dataloader.add_source(Comments, Comments.data())
+  end
+
   @doc """
   Returns the list of comments.
 

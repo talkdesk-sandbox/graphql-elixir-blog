@@ -4,8 +4,8 @@ defmodule Absinthe.Plug.Batch.Runner do
 
   alias Absinthe.Plug.Request
 
-  def run(queries, conn, config) do
-    queries = build_pipelines(queries, conn, config)
+  def run(queries, conn, conn_info, config) do
+    queries = build_pipelines(queries, conn_info, config)
 
     queries = prepare(queries)
 
@@ -14,10 +14,13 @@ defmodule Absinthe.Plug.Batch.Runner do
       {:error, _, _, _} -> false
     end)
 
-    valid_results = valid_queries |> build_valid_results(config.schema_mod)
-    invalid_results = invalid_queries |> build_invalid_results
+    valid_results = build_valid_results(valid_queries, config.schema_mod)
+    invalid_results = build_invalid_results(invalid_queries)
 
-    restore_order(valid_results, invalid_results)
+    bps = restore_order(valid_results, invalid_results)
+    conn = Absinthe.Plug.apply_before_send(conn, bps, config)
+    results = for bp <- bps, do: bp.result
+    {conn, results}
   end
 
   defp restore_order(valid_results, invalid_results) do
@@ -36,25 +39,25 @@ defmodule Absinthe.Plug.Batch.Runner do
     end)
 
     blueprints
-    |> Absinthe.Plug.Batch.Resolver.resolve(schema: schema)
+    |> Absinthe.Pipeline.BatchResolver.run(schema: schema)
     |> Enum.zip(querys_and_indices)
     |> Enum.map(fn {bp, {query, i}} ->
-      {i, get_result(bp, query)}
+      {i, build_result(bp, query)}
     end)
   end
 
   defp build_invalid_results(invalid_queries) do
     Enum.map(invalid_queries, fn {:error, bp, query, i} ->
-      {i, get_result(bp, query)}
+      {i, build_result(bp, query)}
     end)
   end
 
-  defp get_result(bp, query) do
+  defp build_result(bp, query) do
     case Absinthe.Pipeline.run(bp, result_pipeline(query)) do
-      {:ok, %{result: result}, _} ->
-        result
+      {:ok, bp, _} ->
+        bp
       _ ->
-        %{errors: ["could not produce a valid JSON result"]}
+        %{result: %{errors: ["could not produce a valid JSON result"]}}
     end
   end
 
@@ -62,7 +65,7 @@ defmodule Absinthe.Plug.Batch.Runner do
     for {query, i} <- Enum.with_index(queries) do
       case Absinthe.Pipeline.run(query.document, validation_pipeline(query)) do
         {:ok, bp, _} ->
-          case bp.resolution.validation_errors do
+          case bp.execution.validation_errors do
             [] ->
               {:ok, bp, query, i}
             _ ->
@@ -74,11 +77,11 @@ defmodule Absinthe.Plug.Batch.Runner do
     end
   end
 
-  defp build_pipelines(queries, conn, config) do
+  defp build_pipelines(queries, conn_info, config) do
     for query <- queries do
       query
       |> Map.update!(:raw_options, &([jump_phases: false] ++ &1))
-      |> Request.Query.add_pipeline(conn, config)
+      |> Request.Query.add_pipeline(conn_info, config)
     end
   end
 

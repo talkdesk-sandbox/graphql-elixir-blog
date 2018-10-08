@@ -93,30 +93,35 @@ defmodule Absinthe.Middleware.Batch do
   """
   @type batch_fun :: {module, atom} | {module, atom, term}
 
-  @type post_batch_fun :: (term -> Absinthe.Type.Field.result)
+  @type post_batch_fun :: (term -> Absinthe.Type.Field.result())
 
-  def before_resolution(acc) do
-    case acc do
+  def before_resolution(exec) do
+    case exec.acc do
       %{__MODULE__ => _} ->
-        put_in(acc[__MODULE__][:input], [])
+        put_in(exec.acc[__MODULE__][:input], [])
+
       _ ->
-        Map.put(acc, __MODULE__, %{input: [], output: %{}})
+        put_in(exec.acc[__MODULE__], %{input: [], output: %{}})
     end
   end
 
   def call(%{state: :unresolved} = res, {batch_key, field_data, post_batch_fun, batch_opts}) do
     acc = res.acc
-    acc = update_in(acc[__MODULE__][:input], fn
-      nil -> [{{batch_key, batch_opts}, field_data}]
-      data -> [{{batch_key, batch_opts}, field_data} | data]
-    end)
 
-    %{res |
-      state: :suspended,
-      middleware: [{__MODULE__, {batch_key, post_batch_fun}} | res.middleware],
-      acc: acc,
+    acc =
+      update_in(acc[__MODULE__][:input], fn
+        nil -> [{{batch_key, batch_opts}, field_data}]
+        data -> [{{batch_key, batch_opts}, field_data} | data]
+      end)
+
+    %{
+      res
+      | state: :suspended,
+        middleware: [{__MODULE__, {batch_key, post_batch_fun}} | res.middleware],
+        acc: acc
     }
   end
+
   def call(%{state: :suspended} = res, {batch_key, post_batch_fun}) do
     batch_data_for_fun =
       res.acc
@@ -128,18 +133,19 @@ defmodule Absinthe.Middleware.Batch do
     |> Absinthe.Resolution.put_result(post_batch_fun.(batch_data_for_fun))
   end
 
-  def after_resolution(acc) do
-    output = do_batching(acc[__MODULE__][:input])
-    put_in(acc[__MODULE__][:output], output)
+  def after_resolution(exec) do
+    output = do_batching(exec.acc[__MODULE__][:input])
+    put_in(exec.acc[__MODULE__][:output], output)
   end
 
   defp do_batching(input) do
     input
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
-    |> Enum.map(fn {{batch_fun, batch_opts}, batch_data}->
-      {batch_opts, Task.async(fn ->
-        {batch_fun, call_batch_fun(batch_fun, batch_data)}
-      end)}
+    |> Enum.map(fn {{batch_fun, batch_opts}, batch_data} ->
+      {batch_opts,
+       Task.async(fn ->
+         {batch_fun, call_batch_fun(batch_fun, batch_data)}
+       end)}
     end)
     |> Map.new(fn {batch_opts, task} ->
       timeout = Keyword.get(batch_opts, :timeout, 5_000)
@@ -150,16 +156,18 @@ defmodule Absinthe.Middleware.Batch do
   defp call_batch_fun({module, fun}, batch_data) do
     call_batch_fun({module, fun, []}, batch_data)
   end
+
   defp call_batch_fun({module, fun, config}, batch_data) do
     apply(module, fun, [config, batch_data])
   end
 
   # If the flag is set we need to do another resolution phase.
   # otherwise, we do not
-  def pipeline(pipeline, acc) do
-    case acc[__MODULE__][:input] do
-      [_|_] ->
+  def pipeline(pipeline, exec) do
+    case exec.acc[__MODULE__][:input] do
+      [_ | _] ->
         [Absinthe.Phase.Document.Execution.Resolution | pipeline]
+
       _ ->
         pipeline
     end

@@ -2,9 +2,23 @@ defmodule BlogWeb.Schema do
   use Absinthe.Schema
   import_types BlogWeb.Schema.Types
 
-  alias BlogWeb.PostsResolver
-  alias BlogWeb.AccountsResolver
-  alias BlogWeb.CommentsResolver
+  alias BlogWeb.{PostsResolver, AccountsResolver, CommentsResolver}
+  alias Blog.{Accounts, Posts, Comments}
+
+
+  def context(ctx) do
+    loader =
+      Dataloader.new
+      |> Dataloader.add_source(Accounts, Accounts.data())
+      |> Dataloader.add_source(Posts, Posts.data())
+      |> Dataloader.add_source(Comments, Comments.data())
+
+    Map.put(ctx, :loader, loader)
+  end
+
+  def plugins do
+    [Absinthe.Middleware.Dataloader] ++ Absinthe.Plugin.defaults()
+  end
 
 
   #I can have queries with args

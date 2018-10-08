@@ -12,7 +12,7 @@ defmodule Absinthe.Plug do
         json_decoder: Poison
 
       plug Absinthe.Plug,
-        schema: MyApp.Schema
+        schema: MyAppWeb.Schema
 
   If you want only `Absinthe.Plug` to serve a particular route, configure your
   router like:
@@ -22,8 +22,9 @@ defmodule Absinthe.Plug do
         pass: ["*/*"],
         json_decoder: Poison
 
-      forward "/api", Absinthe.Plug,
-        schema: MyApp.Schema
+      forward "/api",
+        to: Absinthe.Plug,
+        init_opts: [schema: MyAppWeb.Schema]
 
   See the documentation on `Absinthe.Plug.init/1` and the `Absinthe.Plug.opts`
   type for information on the available options.
@@ -32,8 +33,75 @@ defmodule Absinthe.Plug do
   `Absinthe.Plug.GraphiQL`:
 
       forward "/graphiql",
+        to: Absinthe.Plug.GraphiQL,
+        init_opts: [schema: MyAppWeb.Schema]
+
+  For more information, see the API documentation for `Absinthe.Plug`.
+
+  ### Phoenix.Router
+
+  If you are using [Phoenix.Router](https://hexdocs.pm/phoenix/Phoenix.Router.html), `forward` expects different arguments:
+
+  #### Plug.Router
+
+      forward "/graphiql",
+        to: Absinthe.Plug.GraphiQL,
+        init_opts: [
+          schema: MyAppWeb.Schema,
+          interface: :simple
+        ]
+
+  #### Phoenix.Router
+
+      forward "/graphiql",
         Absinthe.Plug.GraphiQL,
-        schema: MyApp.Schema,
+         schema: MyAppWeb.Schema,
+         interface: :simple
+
+  For more information see [Phoenix.Router.forward/4](https://hexdocs.pm/phoenix/Phoenix.Router.html#forward/4).
+
+  ## Before Send
+
+  If you need to set a value (like a cookie) on the connection after resolution
+  but before values are sent to the client, use the `:before_send` option:
+
+  ```
+  plug Absinthe.Plug,
+    schema: MyApp.Schema,
+    before_send: {__MODULE__, :absinthe_before_send}
+
+  def absinthe_before_send(conn, %Absinthe.Blueprint{} = blueprint}) do
+    if auth_token = blueprint.execution.context[:auth_token] do
+      put_session(conn, :auth_token, auth_token)
+    else
+      conn
+    end
+  end
+  def absinthe_before_send(conn, _) do
+    conn
+  end
+  ```
+
+  The `auth_token` can be placed in the context by using middleware after your
+  mutation resolve:
+
+  ```
+  # mutation resolver
+  resolve fn args, _ ->
+    case authenticate(args) do
+      {:ok, token} -> {:ok, %{token: token}}
+      error -> error
+    end
+  end
+  # middleware afterward
+  middleware fn resolution, _ ->
+    with %{value: %{token: token}} <- resolution do
+      Map.update!(resolution, :context, fn ctx ->
+        Map.put(ctx, :auth_token, token)
+      end)
+    end
+  end)
+  ```
 
   ## Included GraphQL Types
 
@@ -45,7 +113,7 @@ defmodule Absinthe.Plug do
   ## More Information
 
   For more on configuring `Absinthe.Plug` and how GraphQL requests are made,
-  see [the guide](http://absinthe-graphql.org/guides/plug-phoenix/) at
+  see [the guide](https://hexdocs.pm/absinthe/plug-phoenix.html) at
   <http://absinthe-graphql.org>.
 
   """
@@ -68,6 +136,8 @@ defmodule Absinthe.Plug do
   - `:pipeline` -- (Optional) `{module, atom}` reference to a 2-arity function that will be called to generate the processing pipeline. (default: `{Absinthe.Plug, :default_pipeline}`).
   - `:document_providers` -- (Optional) A `{module, atom}` reference to a 1-arity function that will be called to determine the document providers that will be used to process the request. (default: `{Absinthe.Plug, :default_document_providers}`, which configures `Absinthe.Plug.DocumentProvider.Default` as the lone document provider). A simple list of document providers can also be given. See `Absinthe.Plug.DocumentProvider` for more information about document providers, their role in procesing requests, and how you can define and configure your own.
   - `:schema` -- (Required, if not handled by Mix.Config) The Absinthe schema to use. If a module name is not provided, `Application.get_env(:absinthe, :schema)` will be attempt to find one.
+  - `:serializer` -- (Optional) Similar to `:json_codec` but allows the use of serialization formats other than JSON, like MessagePack or Erlang Term Format. Defaults to whatever is set in `:json_codec`.
+  - `content_type` -- (Optional) The content type of the response. Should probably be set if `:serializer` option is used. Defaults to `"application/json"`.
   """
   @type opts :: [
     schema: module,
@@ -79,6 +149,8 @@ defmodule Absinthe.Plug do
     document_providers: [Absinthe.Plug.DocumentProvider.t, ...] | Absinthe.Plug.DocumentProvider.t | {module, atom},
     analyze_complexity: boolean,
     max_complexity: non_neg_integer | :infinity,
+    serializer: module | {module, Keyword.t},
+    content_type: String.t,
   ]
 
   @doc """
@@ -103,9 +175,22 @@ defmodule Absinthe.Plug do
       other -> other
     end
 
+    serializer = case Keyword.get(opts, :serializer, json_codec) do
+      module when is_atom(module) -> %{module: module, opts: []}
+      {mod, opts} -> %{module: mod, opts: opts}
+      other -> other
+    end
+
+    content_type = Keyword.get(opts, :content_type, "application/json")
+
     schema_mod = opts |> get_schema
 
     raw_options = Keyword.take(opts, @raw_options)
+    log_level = Keyword.get(opts, :log_level, :debug)
+
+    pubsub = Keyword.get(opts, :pubsub, nil)
+
+    before_send = Keyword.get(opts, :before_send)
 
     %{
       adapter: adapter,
@@ -116,6 +201,11 @@ defmodule Absinthe.Plug do
       pipeline: pipeline,
       raw_options: raw_options,
       schema_mod: schema_mod,
+      serializer: serializer,
+      content_type: content_type,
+      log_level: log_level,
+      pubsub: pubsub,
+      before_send: before_send,
     }
   end
 
@@ -131,11 +221,22 @@ defmodule Absinthe.Plug do
     schema
   end
 
+  @doc false
+  def apply_before_send(conn, bps, %{before_send: {mod, fun}}) do
+    Enum.reduce(bps, conn, fn bp, conn ->
+      apply(mod, fun, [conn, bp])
+    end)
+  end
+  def apply_before_send(conn, _, _) do
+    conn
+  end
+
   @doc """
   Parses, validates, resolves, and executes the given Graphql Document
   """
   @spec call(Plug.Conn.t, map) :: Plug.Conn.t | no_return
-  def call(conn, %{json_codec: json_codec} = config) do
+  def call(conn, config) do
+    config = update_config(conn, config)
     {conn, result} = conn |> execute(config)
 
     case result do
@@ -143,17 +244,21 @@ defmodule Absinthe.Plug do
         conn
         |> send_resp(400, msg)
 
+      {:ok, %{"subscribed" => topic}} ->
+        conn
+        |> subscribe(topic, config)
+
       {:ok, %{data: _} = result} ->
         conn
-        |> json(200, result, json_codec)
+        |> encode(200, result, config)
 
       {:ok, %{errors: _} = result} ->
         conn
-        |> json(400, result, json_codec)
+        |> encode(400, result, config)
 
       {:ok, result} when is_list(result) ->
         conn
-        |> json(200, result, json_codec)
+        |> encode(200, result, config)
 
       {:error, {:http_method, text}, _} ->
         conn
@@ -166,6 +271,65 @@ defmodule Absinthe.Plug do
     end
   end
 
+  defp update_config(conn, config) do
+    pubsub = config[:pubsub] || config.context[:pubsub] || conn.private[:phoenix_endpoint]
+    if pubsub do
+      put_in(config, [:context, :pubsub], pubsub)
+    else
+      config
+    end
+  end
+
+  def subscribe(conn, topic, %{context: %{pubsub: pubsub}} = config) do
+    pubsub.subscribe(topic)
+    conn
+    |> put_resp_header("content-type", "text/event-stream")
+    |> send_chunked(200)
+    |> subscribe_loop(topic, config)
+  end
+
+  def subscribe_loop(conn, topic, config) do
+    receive do
+      %{event: "subscription:data", payload: %{result: result}} ->
+        case chunk(conn, "#{encode_json!(result, config)}\n\n") do
+          {:ok, conn} ->
+            subscribe_loop(conn, topic, config)
+          {:error, :closed} ->
+            Absinthe.Subscription.unsubscribe(config.context.pubsub, topic)
+            conn
+        end
+      :close ->
+        Absinthe.Subscription.unsubscribe(config.context.pubsub, topic)
+        conn
+    after
+      30_000 ->
+        case chunk(conn, ":ping\n\n") do
+          {:ok, conn} ->
+            subscribe_loop(conn, topic, config)
+          {:error, :closed} ->
+            Absinthe.Subscription.unsubscribe(config.context.pubsub, topic)
+            conn
+        end
+    end
+  end
+
+  @doc """
+  Sets the options for a given GraphQL document execution.
+
+  ## Examples
+
+      iex> Absinthe.Plug.put_options(conn, context: %{current_user: user})
+      %Plug.Conn{}
+  """
+  @spec put_options(Plug.Conn.t, Keyword.t) :: Plug.Conn.t
+  def put_options(%Plug.Conn{private: %{absinthe: absinthe}} = conn, opts) do
+    opts = Map.merge(absinthe, Enum.into(opts, %{}))
+    Plug.Conn.put_private(conn, :absinthe, opts)
+  end
+  def put_options(conn, opts) do
+    Plug.Conn.put_private(conn, :absinthe, Enum.into(opts, %{}))
+  end
+
   @doc false
   @spec execute(Plug.Conn.t, map) :: {Plug.Conn.t, any}
   def execute(conn, config) do
@@ -175,7 +339,7 @@ defmodule Absinthe.Plug do
 
     with {:ok, conn, request} <- Request.parse(conn, config),
          {:ok, request} <- ensure_processable(request, config) do
-      {conn, run_request(request, conn_info, config)}
+      run_request(request, conn, conn_info, config)
     else
       result ->
         {conn, result}
@@ -225,11 +389,12 @@ defmodule Absinthe.Plug do
     end
   end
 
-  def run_request(%{batch: true, queries: queries} = request, conn, config) do
-    Request.log(request)
+  @doc false
+  def run_request(%{batch: true, queries: queries} = request, conn, conn_info, config) do
+    Request.log(request, config.log_level)
+    {conn, results} = Absinthe.Plug.Batch.Runner.run(queries, conn, conn_info, config)
     results =
-      queries
-      |> Absinthe.Plug.Batch.Runner.run(conn, config)
+      results
       |> Enum.zip(request.extra_keys)
       |> Enum.map(fn {result, extra_keys} ->
         Map.merge(extra_keys, %{
@@ -237,18 +402,21 @@ defmodule Absinthe.Plug do
         })
       end)
 
-    {:ok, results}
+    {conn, {:ok, results}}
   end
-  def run_request(%{batch: false, queries: [query]} = request, conn_info, config) do
-    Request.log(request)
-    run_query(query, conn_info, config)
+  def run_request(%{batch: false, queries: [query]} = request, conn, conn_info, config) do
+    Request.log(request, config.log_level)
+    run_query(query, conn, conn_info, config)
   end
 
-  def run_query(query, conn_info, config) do
+  defp run_query(query, conn ,conn_info, config) do
     %{document: document, pipeline: pipeline} = Request.Query.add_pipeline(query, conn_info, config)
-
-    with {:ok, %{result: result}, _} <- Absinthe.Pipeline.run(document, pipeline) do
-      {:ok, result}
+    case Absinthe.Pipeline.run(document, pipeline) do
+      {:ok, %{result: result} = bp, _} ->
+        conn = apply_before_send(conn, [bp], config)
+        {conn, {:ok, result}}
+      val ->
+        {conn, val}
     end
   end
 
@@ -268,7 +436,9 @@ defmodule Absinthe.Plug do
     config.schema_mod
     |> Absinthe.Pipeline.for_document(pipeline_opts)
     |> Absinthe.Pipeline.insert_after(Absinthe.Phase.Document.CurrentOperation,
-      {Absinthe.Plug.Validation.HTTPMethod, method: config.conn_private.http_method}
+      [
+        {Absinthe.Plug.Validation.HTTPMethod, method: config.conn_private.http_method},
+      ]
     )
   end
 
@@ -295,11 +465,16 @@ defmodule Absinthe.Plug do
   #
 
   @doc false
-  @spec json(Plug.Conn.t, 200 | 400 | 405 | 500, String.t, map) :: Plug.Conn.t | no_return
-  def json(conn, status, body, json_codec) do
+  @spec encode(Plug.Conn.t, 200 | 400 | 405 | 500, String.t, map) :: Plug.Conn.t | no_return
+  def encode(conn, status, body, %{serializer: %{module: mod, opts: opts}, content_type: content_type}) do
     conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(status, json_codec.module.encode!(body, json_codec.opts))
+    |> put_resp_content_type(content_type)
+    |> send_resp(status, mod.encode!(body, opts))
+  end
+
+  @doc false
+  def encode_json!(value, %{json_codec: json_codec}) do
+    json_codec.module.encode!(value, json_codec.opts)
   end
 
 end

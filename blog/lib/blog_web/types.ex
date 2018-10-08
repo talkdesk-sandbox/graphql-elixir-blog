@@ -1,6 +1,9 @@
 defmodule BlogWeb.Schema.Types do
   use Absinthe.Schema.Notation
   use Absinthe.Ecto, repo: Blog.Repo
+  import Absinthe.Resolution.Helpers, only: [dataloader: 1]
+
+  import Absinthe.Resolution.Helpers
   import_types Absinthe.Type.Custom
 
   object :author do
@@ -8,8 +11,8 @@ defmodule BlogWeb.Schema.Types do
     field :email, :string
     field :name, :string
     field :password, :string
-    field :posts, list_of(:post), resolve: assoc(:post)
-    field :comments, list_of(:comment), resolve: assoc(:comment)
+    field :posts, list_of(:post), resolve: dataloader(Blog.Posts)
+    field :comments, list_of(:comment), resolve: dataloader(Blog.Comments)
   end
 
   object :post do
@@ -17,7 +20,7 @@ defmodule BlogWeb.Schema.Types do
     field :created_at, :date
     field :title, :string
     field :author_id, :author, resolve: assoc(:author)
-    field :comments, list_of(:comment), resolve: assoc(:comment)
+    field :comments, list_of(:comment), resolve: dataloader(Blog.Comments)
   end
 
   object :comment do

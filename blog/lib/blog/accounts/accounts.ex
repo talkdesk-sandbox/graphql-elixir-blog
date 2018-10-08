@@ -8,6 +8,27 @@ defmodule Blog.Accounts do
 
   alias Blog.Accounts.Author
 
+  def data() do
+    Dataloader.Ecto.new(Repo, query: &query/2)
+  end
+
+  def query(Post, f) do
+    Post |> limit(10)
+  end
+
+  def query(Comment, f) do
+    Comment |> limit(10)
+  end
+
+  def query(queryable, _) do
+    queryable
+  end
+
+  def dataloader() do
+    Dataloader.new
+    |> Dataloader.add_source(Accounts, Accounts.data())
+  end
+
   @doc """
   Returns the list of authors.
 
