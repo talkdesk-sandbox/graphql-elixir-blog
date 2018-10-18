@@ -1,7 +1,9 @@
+#!/usr/bin/env ruby
+
 require 'graphlient'
 require 'pry-nav'
 
-client = Graphlient::Client.new('http://0.0.0.0:4000/graphql', ##change this url
+client = Graphlient::Client.new(ENV["GRAPHQL_URL"],
   headers: {
   }
 )

@@ -49,35 +49,46 @@ vanessa = Repo.insert!(%Author{
 
   ##titles & contents (source of the content: wikipedia)
   title1 = "What is Elixir?"
-  content1 = "Elixir is a functional, concurrent, general-purpose programming"+
-  "language that runs on the Erlang virtual machine. Elixir builds on top of"+
-  "Erlang and shares the same abstractions for building distributed,"+
-  "fault-tolerant applications. Elixir also provides a productive tooling and an"+
-  "extensible design."
+  content1 = """
+  Elixir is a functional, concurrent, general-purpose programming
+  language that runs on the Erlang virtual machine. Elixir builds on top of
+  Erlang and shares the same abstractions for building distributed,
+  fault-tolerant applications. Elixir also provides a productive tooling and an
+  extensible design.
+  """
   title2 = "About Elixir"
-  content2 = "Elixir is used by companies such as E-MetroTel, Pinterest and Moz."+
-  "Elixir is also used for web development, by companies such as Bleacher Report,"+
-  "Discord, and Inverse, and for building embedded systems. The community"+
-  "organizes yearly events in United States, Europe and Japan as well as minor"+
-  "local events and conferences."
+  content2 = """
+  Elixir is used by companies such as E-MetroTel, Pinterest and Moz.
+  Elixir is also used for web development, by companies such as Bleacher Report,
+  Discord, and Inverse, and for building embedded systems. The community
+  organizes yearly events in United States, Europe and Japan as well as minor
+  local events and conferences.
+  """
   title3 = "The History of Elixir"
-  content3 = "José Valim is the creator of the Elixir programming language, an"+
-  "R&D project of Plataformatec. His goals were to enable higher extensibility and"+
-  "productivity in the Erlang VM while keeping compatibility with Erlang's"+
-  "ecosystem."
+  content3 = """
+  José Valim is the creator of the Elixir programming language, an
+  R&D project of Plataformatec. His goals were to enable higher extensibility and
+  productivity in the Erlang VM while keeping compatibility with Erlang's
+  ecosystem.
+  """
   title4 = "Phoenix Framework: What is it?"
-  content4 = "Phoenix is a web development framework written in the functional"+
-  "programming language Elixir. Phoenix uses a server-side model-view-controller"+
-  "(MVC) pattern. Based on the Plug library, and ultimately the Cowboy Erlang"+
-  "framework, it was developed to provide highly performant and scalable web"+
-  "applications. In addition to the request/response functionality provided by the"+
-  "underlying Cowboy server, Phoenix provides soft realtime communication to"+
-  "external clients through websockets or long polling using its language agnostic"+
-  "channels feature"
+  content4 = """
+  Phoenix is a web development framework written in the functional
+  programming language Elixir. Phoenix uses a server-side model-view-controller
+  (MVC) pattern. Based on the Plug library, and ultimately the Cowboy Erlang
+  framework, it was developed to provide highly performant and scalable web
+  applications. In addition to the request/response functionality provided by the
+  underlying Cowboy server, Phoenix provides soft realtime communication to
+  external clients through websockets or long polling using its language agnostic
+  channels feature.
+  """
   title5 = "GraphQL | A query language for your API"
-  content5 = "GraphQL is an open source data query and manipulation language, and
+  content5 = """
+  GraphQL is an open source data query and manipulation language, and
   a runtime for fulfilling queries with existing data. GraphQL was developed
-  internally by Facebook in 2012 before being publicly released in 2015."
+  internally by Facebook in 2012 before being publicly released in 2015.
+  
+  """
 
 post1 = Repo.insert!(%Post{
   title: title1,

@@ -1,0 +1,4 @@
+_build
+deps
+config/*.secret.exs
+priv/static/

@@ -1,0 +1,30 @@
+version: '3'
+services:
+  blog:
+    build: ./blog
+    depends_on:
+      - postgres
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: blog_dev
+    ports:
+      - "4000:4000"
+
+  client:
+   build: ./ruby-client
+   depends_on:
+     - blog
+   environment:
+     GRAPHQL_URL: http://blog:4000/graphql
+
+  postgres:
+    image: "postgres:10.5"
+    environment:
+      POSTGRES_DB: blog_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5532:5432"
